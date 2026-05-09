@@ -1,0 +1,20 @@
+# Tauri / Rust
+src-tauri/target/
+src-tauri/gen/
+
+# Compiled Python sidecar binary (too large for git; build separately)
+src-tauri/binaries/
+
+# Node
+node_modules/
+
+# macOS
+.DS_Store
+
+# Build artifacts
+dist/
+*.app
+*.dmg
+*.pkg
+*.exe
+*.msi

@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; -webkit-user-select: none; user-select: none; }
+
+body {
+  background: transparent;
+  width: 200px;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: -apple-system, BlinkMacSystemFont, "Inter", "SF Pro Display", sans-serif;
+  overflow: hidden;
+  cursor: default;
+}
+
+/* The pill itself */
+#pill {
+  width: 100%;
+  height: 48px;
+  background: rgba(12, 13, 15, 0.88);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255,255,255,0.10);
+  border-radius: 28px;
+  display: flex;
+  align-items: center;
+  padding: 0 10px 0 8px;
+  gap: 8px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5), 0 2px 8px rgba(0,0,0,0.3);
+  transition: box-shadow 0.2s, border-color 0.2s;
+  cursor: pointer;
+}
+
+#pill:hover {
+  border-color: rgba(255,255,255,0.18);
+  box-shadow: 0 12px 40px rgba(0,0,0,0.55), 0 2px 8px rgba(0,0,0,0.3);
+}
+
+/* Mic button */
+#mic-btn {
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  background: #5e6ad2;
+  border: none; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  transition: background 0.15s, transform 0.1s;
+  position: relative;
+  z-index: 1;
+}
+
+#mic-btn:active { transform: scale(0.92); }
+#mic-btn svg { width: 15px; height: 15px; fill: none; stroke: #fff; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+
+/* Recording state */
+#mic-btn.rec { background: #dc2626; }
+@keyframes pulse-ring {
+  0%   { box-shadow: 0 0 0 0   rgba(220,38,38,0.55); }
+  70%  { box-shadow: 0 0 0 8px rgba(220,38,38,0); }
+  100% { box-shadow: 0 0 0 0   rgba(220,38,38,0); }
+}
+#mic-btn.rec { animation: pulse-ring 1.4s ease-out infinite; }
+
+/* Status text area */
+#info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+#label {
+  font-size: 12px;
+  font-weight: 560;
+  color: rgba(255,255,255,0.90);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+}
+
+#sublabel {
+  font-size: 10px;
+  color: rgba(255,255,255,0.38);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  letter-spacing: 0.01em;
+  line-height: 1.2;
+}
+
+/* Waveform — shown when recording */
+#wave {
+  display: none;
+  align-items: center;
+  gap: 2px;
+  height: 16px;
+}
+#wave span {
+  display: block;
+  width: 2px;
+  background: rgba(220,38,38,0.8);
+  border-radius: 2px;
+  animation: wave-bar 0.8s ease-in-out infinite;
+}
+#wave span:nth-child(1) { animation-delay: 0s; }
+#wave span:nth-child(2) { animation-delay: 0.12s; }
+#wave span:nth-child(3) { animation-delay: 0.24s; }
+#wave span:nth-child(4) { animation-delay: 0.36s; }
+#wave span:nth-child(5) { animation-delay: 0.48s; }
+@keyframes wave-bar {
+  0%, 100% { height: 4px; opacity: 0.5; }
+  50%       { height: 14px; opacity: 1; }
+}
+
+/* Success flash */
+#pill.success {
+  border-color: rgba(122,184,145,0.4);
+}
+#mic-btn.success { background: #27a644; animation: none; }
+
+/* Expand button */
+#expand-btn {
+  width: 22px; height: 22px;
+  border-radius: 6px;
+  background: transparent;
+  border: none; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  opacity: 0.32;
+  transition: opacity 0.15s, background 0.15s;
+  flex-shrink: 0;
+}
+#expand-btn:hover { opacity: 0.8; background: rgba(255,255,255,0.07); }
+#expand-btn svg { width: 12px; height: 12px; fill: none; stroke: #fff; stroke-width: 2; stroke-linecap: round; }
+</style>
+</head>
+<body>
+
+<div id="pill" onclick="toggleMic()">
+  <button id="mic-btn" title="Click to speak">
+    <svg id="mic-icon" viewBox="0 0 24 24">
+      <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+      <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+      <line x1="12" y1="19" x2="12" y2="23"/>
+      <line x1="8" y1="23" x2="16" y2="23"/>
+    </svg>
+  </button>
+
+  <div id="info">
+    <div id="label">Tap to speak</div>
+    <div id="sublabel" id="sublabel">Flow · ready</div>
+  </div>
+
+  <div id="wave">
+    <span></span><span></span><span></span><span></span><span></span>
+  </div>
+
+  <button id="expand-btn" onclick="openSettings(event)" title="Open Flow">
+    <svg viewBox="0 0 24 24">
+      <circle cx="12" cy="5"  r="1.2" fill="#fff"/>
+      <circle cx="12" cy="12" r="1.2" fill="#fff"/>
+      <circle cx="12" cy="19" r="1.2" fill="#fff"/>
+    </svg>
+  </button>
+</div>
+
+<script>
+let recording = false;
+let successTimer = null;
+let statusTimer  = null;
+let _hotkey = "Alt + Space";
+
+function toggleMic() {
+  if (!window.pywebview) return;
+  pywebview.api.toggle_recording().then(() => {
+    pywebview.api.get_state().then(applyState);
+  });
+}
+
+function openSettings(e) {
+  e.stopPropagation();
+  if (window.pywebview) pywebview.api.show_main_window();
+}
+
+function applyState(s) {
+  const btn   = document.getElementById('mic-btn');
+  const lbl   = document.getElementById('label');
+  const sub   = document.getElementById('sublabel');
+  const wave  = document.getElementById('wave');
+  const pill  = document.getElementById('pill');
+
+  recording = !!s.recording;
+
+  clearTimeout(successTimer);
+  clearTimeout(statusTimer);
+  pill.classList.remove('success');
+
+  if (recording) {
+    btn.className = 'rec';
+    lbl.textContent = 'Listening…';
+    sub.textContent = s.mode === 'capture' ? 'capture mode · not inserting' : 'speak now';
+    wave.style.display = 'flex';
+  } else {
+    btn.className = '';
+    wave.style.display = 'none';
+
+    // Show status message, then revert to idle
+    const status = s.status || '';
+    if (status.startsWith('✓') || status === 'Thought saved') {
+      // Success feedback
+      btn.className = 'success';
+      pill.classList.add('success');
+      lbl.textContent = status;
+      sub.textContent = '';
+      successTimer = setTimeout(() => {
+        btn.className = '';
+        pill.classList.remove('success');
+        setIdle(s);
+      }, 2000);
+    } else if (status && !status.startsWith('Booting') && status !== 'Ready') {
+      lbl.textContent = status;
+      sub.textContent = '';
+      statusTimer = setTimeout(() => setIdle(s), 3000);
+    } else {
+      setIdle(s);
+    }
+  }
+}
+
+function setIdle(s) {
+  const lbl  = document.getElementById('label');
+  const sub  = document.getElementById('sublabel');
+  const mode = s ? s.mode : 'dictation';
+  lbl.textContent = 'Tap to speak';
+  if (mode === 'capture') {
+    sub.textContent = 'capture mode · saves thoughts';
+  } else {
+    sub.textContent = _hotkey + ' · or click';
+  }
+}
+
+// Hotkey hint from config
+function loadHotkey() {
+  if (!window.pywebview) return;
+  pywebview.api.get_config().then(cfg => {
+    if (cfg && cfg.hotkey) {
+      _hotkey = cfg.hotkey.replace(/<|>/g,'').replace(/\+/g,' + ');
+      const sub = document.getElementById('sublabel');
+      if (sub && !recording) sub.textContent = _hotkey + ' · or click';
+    }
+  });
+}
+
+// Fast poll — 500ms in recording, 1.5s idle
+let _pollMs = 1500;
+function poll() {
+  if (!window.pywebview) { setTimeout(poll, 500); return; }
+  pywebview.api.get_state().then(s => {
+    applyState(s);
+    _pollMs = s.recording ? 500 : 1500;
+
+    // Consume speed toast and show in sub-label briefly
+    pywebview.api.pop_toast().then(t => {
+      if (t && t.toast && !s.recording) {
+        const sub = document.getElementById('sublabel');
+        sub.textContent = '⚡ ' + t.toast;
+        clearTimeout(statusTimer);
+        statusTimer = setTimeout(() => { if (!recording) setIdle(s); }, 3000);
+      }
+    });
+  }).catch(() => {}).finally(() => setTimeout(poll, _pollMs));
+}
+
+window.addEventListener('pywebviewready', () => {
+  loadHotkey();
+  poll();
+});
+// Fallback if event already fired
+setTimeout(() => { if (window.pywebview) { loadHotkey(); poll(); } }, 300);
+</script>
+</body>
+</html>
