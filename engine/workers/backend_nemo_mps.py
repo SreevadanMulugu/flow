@@ -12,7 +12,9 @@ Flow.py spawns this once, keeps it alive, sends audio chunks, reads results.
 import sys, os, struct, time, json, warnings
 warnings.filterwarnings("ignore")
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
-os.environ["HF_HUB_OFFLINE"] = "1"
+# HF_HUB_OFFLINE: only set offline AFTER model is confirmed cached.
+# On a fresh machine we need network access to download the model.
+# The parent process sets this env var once download is complete.
 
 import numpy as np
 import soundfile as sf
@@ -45,7 +47,12 @@ def main():
     t0 = time.time()
 
     import nemo.collections.asr as nemo_asr
+    # Allow HF download on first run — model is ~2.4GB, cached to ~/.cache/huggingface/
+    os.environ.pop("HF_HUB_OFFLINE", None)
+    os.environ.pop("TRANSFORMERS_OFFLINE", None)
     model = nemo_asr.models.ASRModel.from_pretrained("nvidia/parakeet-tdt-0.6b-v3")
+    # Model cached — go offline to prevent accidental network calls
+    os.environ["HF_HUB_OFFLINE"] = "1"
 
     # Use MPS (Metal GPU) if available, else CPU
     if torch.backends.mps.is_available():

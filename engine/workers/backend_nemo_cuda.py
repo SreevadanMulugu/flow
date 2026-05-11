@@ -10,7 +10,6 @@ giving real streaming without LocalAgreement approximation.
 import sys, os, time, json, struct, warnings
 warnings.filterwarnings("ignore")
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
-os.environ["HF_HUB_OFFLINE"] = "1"
 
 import numpy as np
 import soundfile as sf
@@ -29,7 +28,10 @@ def main():
     t0 = time.time()
 
     import nemo.collections.asr as nemo_asr
+    os.environ.pop("HF_HUB_OFFLINE", None)
+    os.environ.pop("TRANSFORMERS_OFFLINE", None)
     model = nemo_asr.models.ASRModel.from_pretrained("nvidia/parakeet-tdt-0.6b-v3")
+    os.environ["HF_HUB_OFFLINE"] = "1"
     model = model.to("cuda")
     model.eval()
 

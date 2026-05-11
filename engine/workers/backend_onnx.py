@@ -2,8 +2,8 @@
 ONNX Runtime backend for Parakeet TDT.
 Runs on Windows and Linux with any GPU (CUDA, ROCm, DirectML) or CPU.
 
-Model must be exported first via: python scripts/export_onnx.py
-Quantized INT8 model is ~600MB vs 2.4GB FP32.
+Model is downloaded automatically from HuggingFace on first run (INT8 quantized, ~600MB).
+Falls back to: python scripts/export_onnx.py if HF download unavailable.
 
 Auto-selects the best Execution Provider:
   CUDA → ROCm → DirectML → CPU
@@ -11,9 +11,37 @@ Auto-selects the best Execution Provider:
 import os, sys, time, json, struct, tempfile
 import numpy as np
 
-MODEL_DIR   = os.path.expanduser("~/.flow/models/parakeet-onnx")
+MODEL_DIR    = os.path.expanduser("~/.flow/models/parakeet-onnx")
 ENCODER_PATH = os.path.join(MODEL_DIR, "encoder.onnx")
 DECODER_PATH = os.path.join(MODEL_DIR, "decoder_joint.onnx")
+
+# Pre-exported quantized ONNX model hosted on HuggingFace
+# (exported via scripts/export_onnx.py --quantize and uploaded)
+HF_ONNX_REPO = "SreevadanMulugu/parakeet-tdt-0.6b-v3-onnx-int8"
+
+def _ensure_model():
+    """Download quantized ONNX model if not already cached."""
+    if os.path.exists(ENCODER_PATH) and os.path.exists(DECODER_PATH):
+        return  # already downloaded
+
+    os.makedirs(MODEL_DIR, exist_ok=True)
+    _log(f"Downloading quantized ONNX model (~600MB)...")
+    _log(f"  Source: {HF_ONNX_REPO}")
+
+    try:
+        from huggingface_hub import snapshot_download
+        snapshot_download(
+            repo_id=HF_ONNX_REPO,
+            local_dir=MODEL_DIR,
+            ignore_patterns=["*.git*", "*.md", "*.txt"],
+        )
+        _log("Download complete.")
+    except Exception as e:
+        raise RuntimeError(
+            f"ONNX model download failed: {e}\n"
+            "Run manually:  python scripts/export_onnx.py --quantize\n"
+            f"Or upload to:  {HF_ONNX_REPO}"
+        )
 
 def _log(msg):
     print(f"[onnx] {msg}", file=sys.stderr, flush=True)
@@ -34,15 +62,9 @@ def _best_providers(ep_hint: str = None):
     return [p for p in priority if p in available]
 
 def load(ep_hint: str = None):
-    """Load encoder and decoder ONNX sessions."""
+    """Download model if needed, then load ONNX sessions."""
     import onnxruntime as ort
-
-    if not os.path.exists(ENCODER_PATH):
-        raise FileNotFoundError(
-            f"ONNX model not found at {MODEL_DIR}.\n"
-            "Run:  python scripts/export_onnx.py\n"
-            "This converts the NeMo model to ONNX (one-time, ~5 min)."
-        )
+    _ensure_model()
 
     providers = _best_providers(ep_hint)
     _log(f"Using providers: {providers}")

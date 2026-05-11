@@ -16,9 +16,8 @@ from pathlib import Path
 from datetime import datetime
 from typing import Any
 
-# Offline-first: no HuggingFace network requests unless explicitly downloading
-os.environ.setdefault("HF_HUB_OFFLINE", "1")
-os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
+# Workers manage their own HF_HUB_OFFLINE after model is cached.
+# Do NOT set it here — fresh installs need network access to download models.
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
