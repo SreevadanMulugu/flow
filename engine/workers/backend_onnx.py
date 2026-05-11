@@ -15,33 +15,59 @@ MODEL_DIR    = os.path.expanduser("~/.flow/models/parakeet-onnx")
 ENCODER_PATH = os.path.join(MODEL_DIR, "encoder.onnx")
 DECODER_PATH = os.path.join(MODEL_DIR, "decoder_joint.onnx")
 
-# Pre-exported quantized ONNX model hosted on HuggingFace
-# (exported via scripts/export_onnx.py --quantize and uploaded)
-HF_ONNX_REPO = "SreevadanMulugu/parakeet-tdt-0.6b-v3-onnx-int8"
+# Official NVIDIA model on HuggingFace — downloaded then exported to ONNX locally
+NEMO_REPO = "nvidia/parakeet-tdt-0.6b-v3"
 
 def _ensure_model():
-    """Download quantized ONNX model if not already cached."""
+    """
+    Ensure ONNX model exists at MODEL_DIR.
+    First run: downloads NeMo model from nvidia/parakeet-tdt-0.6b-v3,
+    exports encoder + decoder to ONNX, applies INT8 quantization.
+    Cached in ~/.flow/models/parakeet-onnx/ — subsequent runs are instant.
+    """
     if os.path.exists(ENCODER_PATH) and os.path.exists(DECODER_PATH):
-        return  # already downloaded
+        return
 
     os.makedirs(MODEL_DIR, exist_ok=True)
-    _log(f"Downloading quantized ONNX model (~600MB)...")
-    _log(f"  Source: {HF_ONNX_REPO}")
+    _log("First run: downloading Parakeet from nvidia/parakeet-tdt-0.6b-v3 (~2.4GB)")
+    _log("Then exporting to ONNX INT8 (~5 min one-time, cached for all future runs)")
 
     try:
-        from huggingface_hub import snapshot_download
-        snapshot_download(
-            repo_id=HF_ONNX_REPO,
-            local_dir=MODEL_DIR,
-            ignore_patterns=["*.git*", "*.md", "*.txt"],
-        )
-        _log("Download complete.")
-    except Exception as e:
+        import nemo.collections.asr as nemo_asr
+        import torch
+        model = nemo_asr.models.ASRModel.from_pretrained(NEMO_REPO)
+        model.eval()
+        _log("Model loaded — exporting to ONNX...")
+        _export_and_quantize(model)
+        _log(f"ONNX model ready at {MODEL_DIR}")
+    except ImportError:
         raise RuntimeError(
-            f"ONNX model download failed: {e}\n"
-            "Run manually:  python scripts/export_onnx.py --quantize\n"
-            f"Or upload to:  {HF_ONNX_REPO}"
+            "NeMo not installed — cannot export ONNX model.\n"
+            "Run setup script first:  bash scripts/setup_linux.sh\n"
+            "Or on Windows:           .\\scripts\\setup_windows.ps1"
         )
+
+def _export_and_quantize(model):
+    """Export NeMo model to ONNX and quantize INT8 in-place."""
+    import torch, sys
+    # Add scripts/ to path so we can reuse export logic
+    scripts_dir = os.path.join(os.path.dirname(__file__), "..", "..", "scripts")
+    sys.path.insert(0, os.path.abspath(scripts_dir))
+    try:
+        import export_onnx
+        export_onnx._export_encoder(model, ENCODER_PATH)
+        export_onnx._export_decoder(model, DECODER_PATH)
+        export_onnx._quantize(ENCODER_PATH, DECODER_PATH, MODEL_DIR)
+        # Save tokenizer
+        tok_dst = os.path.join(MODEL_DIR, "tokenizer.model")
+        if hasattr(model, "tokenizer") and not os.path.exists(tok_dst):
+            import shutil
+            try:
+                shutil.copy(model.tokenizer.tokenizer.vocab_file, tok_dst)
+            except Exception:
+                pass
+    except Exception as e:
+        raise RuntimeError(f"ONNX export failed: {e}")
 
 def _log(msg):
     print(f"[onnx] {msg}", file=sys.stderr, flush=True)
