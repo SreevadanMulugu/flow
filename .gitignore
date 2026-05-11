@@ -2,7 +2,7 @@
 src-tauri/target/
 src-tauri/gen/
 
-# Compiled Python sidecar binary (too large for git; build separately)
+# Compiled Python sidecar binary (build separately — see scripts/)
 src-tauri/binaries/
 
 # Node
@@ -18,3 +18,20 @@ dist/
 *.pkg
 *.exe
 *.msi
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# Models (too large for git — downloaded/exported at setup time)
+~/.flow/models/
+*.onnx
+*.mlpackage
+*.mlmodel
+
+# Local config and data
+*.flow/
+*.log

@@ -1,0 +1,29 @@
+# Linux with NVIDIA GPU requirements
+# Install: pip install -r requirements/linux_cuda.txt
+
+# Core server
+fastapi>=0.111.0
+uvicorn[standard]>=0.29.0
+numpy>=1.26.0
+sounddevice>=0.4.6
+soundfile>=0.12.1
+websockets>=12.0
+
+# PyTorch with CUDA (adjust cu121 for your CUDA version)
+--index-url https://download.pytorch.org/whl/cu121
+torch>=2.3.0
+
+# NeMo (true conformer_stream_step streaming on CUDA)
+# nemo_toolkit[asr]==2.7.3  # install separately — see setup_linux.sh
+
+# ONNX Runtime with CUDA support (quantized inference)
+onnxruntime-gpu>=1.18.0
+
+# Quantization tools
+onnx>=1.16.0
+onnxruntime>=1.18.0
+
+# Optional utilities
+sentencepiece>=0.2.0
+pynput>=1.7.7
+pyperclip>=1.9.0

@@ -1,0 +1,21 @@
+# Windows requirements (NVIDIA GPU or CPU)
+# Install: pip install -r requirements/windows.txt
+
+# Core server
+fastapi>=0.111.0
+uvicorn[standard]>=0.29.0
+numpy>=1.26.0
+sounddevice>=0.4.6
+soundfile>=0.12.1
+websockets>=12.0
+
+# ONNX Runtime — auto-selects CUDA, DirectML, or CPU
+onnxruntime-gpu>=1.18.0   # includes CUDA + DirectML support
+
+# Quantization tools
+onnx>=1.16.0
+
+# Optional utilities
+sentencepiece>=0.2.0
+pynput>=1.7.7
+pyperclip>=1.9.0

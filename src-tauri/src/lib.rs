@@ -161,8 +161,8 @@ fn build_main_window(app: &AppHandle, base_url: &str) -> Result<(), tauri::Error
         .decorations(true)
         .resizable(true)
         .skip_taskbar(false)
-        .focused(false)
-        .visible(false)
+        .focused(true)
+        .visible(true)
         .center()
         .build()?;
     Ok(())

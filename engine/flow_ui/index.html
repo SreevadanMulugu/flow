@@ -1,0 +1,1363 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Flow</title>
+
+<!-- Inter Variable (bundled locally — no CDN, works offline) -->
+<style>
+  @font-face {
+    font-family: "Inter var";
+    font-weight: 100 900;
+    font-display: swap;
+    font-style: normal;
+    src: url("InterVariable.woff2") format("woff2");
+  }
+  @font-face {
+    font-family: "Inter var";
+    font-weight: 100 900;
+    font-display: swap;
+    font-style: italic;
+    src: url("InterVariable-Italic.woff2") format("woff2");
+  }
+</style>
+
+<!-- Lucide icons (bundled locally) -->
+<script src="lucide.min.js"></script>
+
+<style>
+/* ============================================================
+   Flow — Nature edition
+   Image-first canvas. UI floats as glass on top.
+   ============================================================ */
+
+:root {
+  --ink-1: #ffffff;
+  --ink-2: rgba(255, 255, 255, 0.86);
+  --ink-3: rgba(255, 255, 255, 0.65);
+  --ink-4: rgba(255, 255, 255, 0.46);
+
+  --glass-1: rgba(20, 24, 32, 0.42);
+  --glass-2: rgba(20, 24, 32, 0.55);
+  --glass-3: rgba(20, 24, 32, 0.72);
+
+  --line-1: rgba(255, 255, 255, 0.10);
+  --line-2: rgba(255, 255, 255, 0.16);
+  --line-3: rgba(255, 255, 255, 0.24);
+
+  /* Warm nature palette pulled from the bg image */
+  --indigo:        #d49a4a;   /* warm sun amber — primary accent */
+  --indigo-hover:  #e0a655;
+  --violet:        #f4c47a;   /* lighter warm gold — gradient pair */
+  --warm:          #f4ad6b;
+  --sage:          #7ab891;   /* foliage green — secondary */
+  --teal:          #5fa8d3;   /* sky teal — info */
+  --ok:            #7ab891;
+  --err:           #e88a6a;   /* soft sunset coral, not harsh red */
+
+  --r-1: 6px; --r-2: 10px; --r-3: 14px; --r-4: 20px;
+
+  --shadow-glass:
+    0 0 0 1px rgba(255, 255, 255, 0.10) inset,
+    0 1px 0 rgba(255, 255, 255, 0.18) inset,
+    0 24px 56px rgba(0, 0, 0, 0.35),
+    0 8px 24px rgba(0, 0, 0, 0.22);
+
+  --shadow-dock:
+    0 0 0 1px rgba(255, 255, 255, 0.10) inset,
+    0 1px 0 rgba(255, 255, 255, 0.18) inset,
+    0 30px 80px rgba(0, 0, 0, 0.45),
+    0 12px 36px rgba(0, 0, 0, 0.30);
+
+  --font-ui: "Inter var", "Inter", -apple-system, BlinkMacSystemFont,
+             "SF Pro Display", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  height: 100%;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 400;
+  font-feature-settings: "cv11", "ss01", "ss03";
+  letter-spacing: -0.011em;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  color: var(--ink-1);
+  user-select: none;
+  cursor: default;
+  overflow: hidden;
+}
+
+/* THE BACKGROUND — fixed nature image */
+body {
+  background:
+    /* very subtle dark gradient over the bottom 30% so the dock has contrast */
+    linear-gradient(to bottom, transparent 60%, rgba(0, 0, 0, 0.35) 100%),
+    url("bg.jpeg") center center / cover no-repeat fixed;
+  background-color: #1a2a3a;
+}
+
+button, input, select, textarea {
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  outline: none;
+}
+button { cursor: pointer; }
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.18); border-radius: 9999px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.30); }
+
+.hidden { display: none !important; }
+
+/* ============================================================
+   GLASS PANELS — the design language
+   ============================================================ */
+.glass {
+  background: var(--glass-2);
+  backdrop-filter: blur(40px) saturate(180%);
+  -webkit-backdrop-filter: blur(40px) saturate(180%);
+  box-shadow: var(--shadow-glass);
+  border-radius: var(--r-3);
+}
+.glass-light {
+  background: var(--glass-1);
+  backdrop-filter: blur(30px) saturate(180%);
+  -webkit-backdrop-filter: blur(30px) saturate(180%);
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.08) inset;
+  border-radius: var(--r-2);
+}
+.glass-strong {
+  background: var(--glass-3);
+  backdrop-filter: blur(50px) saturate(200%);
+  -webkit-backdrop-filter: blur(50px) saturate(200%);
+  box-shadow: var(--shadow-dock);
+  border-radius: var(--r-4);
+}
+
+/* ============================================================
+   ONBOARDING — single glass card centered on the image
+   ============================================================ */
+
+#onboarding {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.onb-card {
+  width: 480px;
+  max-width: 92vw;
+  padding: 36px 38px 28px;
+  display: flex;
+  flex-direction: column;
+  min-height: 460px;
+}
+/* glass already applied via class */
+
+.onb-progress {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 32px;
+}
+.onb-dot {
+  height: 3px;
+  flex: 1;
+  background: rgba(255, 255, 255, 0.20);
+  border-radius: 9999px;
+  transition: all 0.45s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.onb-dot.active { background: var(--violet); }
+.onb-dot.done   { background: var(--indigo); }
+
+.onb-step {
+  display: none;
+  flex-direction: column;
+  flex: 1;
+}
+.onb-step.active {
+  display: flex;
+  animation: stepIn 0.45s cubic-bezier(0.16, 1, 0.3, 1);
+}
+@keyframes stepIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.logo-mark {
+  width: 44px; height: 44px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #d49a4a 0%, #f4c47a 100%);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 20px; font-weight: 700; color: #2a1a08;
+  margin-bottom: 22px;
+  box-shadow:
+    0 0 0 1px rgba(255,255,255,0.25) inset,
+    0 8px 22px rgba(212, 154, 74, 0.45);
+}
+
+.display {
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  line-height: 1.08;
+  margin-bottom: 8px;
+}
+.heading {
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.018em;
+  margin-bottom: 8px;
+}
+.lead {
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--ink-2);
+  margin-bottom: 24px;
+  max-width: 380px;
+}
+.body {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--ink-2);
+  margin-bottom: 20px;
+}
+
+.feature-list {
+  list-style: none;
+  margin-bottom: 28px;
+}
+.feature-list li {
+  display: flex;
+  align-items: center;
+  padding: 6px 0;
+  font-size: 13px;
+  color: var(--ink-2);
+}
+.feature-list li i {
+  color: var(--warm);
+  margin-right: 12px;
+  flex-shrink: 0;
+}
+
+/* Buttons */
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: var(--indigo);
+  color: white;
+  font-size: 13px;
+  font-weight: 510;
+  padding: 9px 18px;
+  border-radius: var(--r-2);
+  align-self: flex-start;
+  margin-top: auto;
+  transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow:
+    0 0 0 1px rgba(255,255,255,0.12) inset,
+    0 1px 0 rgba(255,255,255,0.18) inset,
+    0 4px 14px rgba(108, 124, 224, 0.32);
+}
+.btn-primary:hover {
+  background: var(--indigo-hover);
+  transform: translateY(-1px);
+  box-shadow:
+    0 0 0 1px rgba(255,255,255,0.16) inset,
+    0 1px 0 rgba(255,255,255,0.22) inset,
+    0 8px 24px rgba(108, 124, 224, 0.50);
+}
+.btn-primary:active { transform: translateY(0); }
+.btn-primary:disabled { opacity: 0.4; cursor: not-allowed; pointer-events: none; }
+
+.btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--ink-2);
+  font-size: 13px;
+  font-weight: 510;
+  padding: 9px 18px;
+  border-radius: var(--r-2);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.16) inset;
+  transition: all 0.18s ease;
+}
+.btn-ghost:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--ink-1);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.24) inset;
+}
+
+.btn-row { display: flex; gap: 10px; margin-top: auto; }
+
+/* Permissions */
+.perm-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 24px;
+}
+.perm-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: var(--r-2);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.10) inset;
+  transition: all 0.25s ease;
+}
+.perm-item.granted {
+  background: rgba(92, 200, 154, 0.12);
+  box-shadow: 0 0 0 1px rgba(92, 200, 154, 0.40) inset;
+}
+.perm-icon {
+  width: 32px; height: 32px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: var(--r-1);
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.perm-meta { flex: 1; min-width: 0; }
+.perm-title { font-size: 13px; font-weight: 510; color: var(--ink-1); }
+.perm-desc  { font-size: 11px; color: var(--ink-3); margin-top: 1px; }
+.perm-action {
+  font-size: 12px; font-weight: 510;
+  padding: 6px 12px;
+  background: var(--indigo);
+  color: white;
+  border-radius: var(--r-1);
+  flex-shrink: 0;
+  transition: all 0.15s ease;
+}
+.perm-action:hover { background: var(--indigo-hover); }
+.perm-status-ok { font-size: 16px; color: var(--ok); flex-shrink: 0; }
+
+/* Benchmark */
+.bench-status {
+  display: flex; align-items: center; gap: 12px;
+  padding: 14px 16px;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: var(--r-2);
+  margin-bottom: 22px;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.10) inset;
+}
+.spinner {
+  width: 14px; height: 14px;
+  border: 2px solid rgba(255, 255, 255, 0.16);
+  border-top-color: var(--violet);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  flex-shrink: 0;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.bench-text {
+  font-size: 12px;
+  color: var(--ink-2);
+  font-family: var(--font-mono);
+}
+
+/* Practice */
+.practice-prompt {
+  padding: 14px 16px;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: var(--r-2);
+  font-size: 14px;
+  font-style: italic;
+  color: var(--ink-1);
+  text-align: center;
+  margin-bottom: 10px;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.10) inset;
+}
+.practice-result {
+  padding: 12px 14px;
+  background: rgba(0, 0, 0, 0.20);
+  border-radius: var(--r-2);
+  font-size: 13px;
+  color: var(--ink-3);
+  min-height: 46px;
+  display: flex; align-items: center;
+  margin-bottom: 22px;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.10) inset;
+  font-family: var(--font-mono);
+  transition: all 0.4s ease;
+}
+.practice-result.has-text {
+  color: var(--ink-1);
+  background: rgba(108, 124, 224, 0.12);
+  box-shadow: 0 0 0 1px var(--indigo) inset;
+}
+
+.check-mark {
+  width: 44px; height: 44px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #7ab891, #a8d8b8);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 22px; color: #1a2a1a; font-weight: 700;
+  margin-bottom: 22px;
+  box-shadow: 0 8px 22px rgba(122, 184, 145, 0.45);
+}
+
+/* Keyboard hint */
+.kbd {
+  display: inline-block;
+  padding: 2px 7px;
+  background: rgba(255, 255, 255, 0.10);
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--ink-1);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.20) inset, 0 1px 0 rgba(0, 0, 0, 0.3);
+  margin: 0 2px;
+}
+
+/* ============================================================
+   MAIN APP — image background, glass panels, bottom dock
+   ============================================================ */
+
+#main {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  z-index: 50;
+}
+
+/* Top bar — minimal, just app name + status */
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 28px;
+  z-index: 10;
+}
+.topbar-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  border-radius: var(--r-2);
+  background: var(--glass-1);
+  backdrop-filter: blur(30px) saturate(180%);
+  -webkit-backdrop-filter: blur(30px) saturate(180%);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.10) inset;
+}
+.topbar-brand .logo-mark {
+  width: 22px; height: 22px;
+  font-size: 12px;
+  border-radius: 5px;
+  margin-bottom: 0;
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.18) inset;
+}
+.brand-name {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+
+.topbar-actions {
+  display: flex;
+  gap: 6px;
+}
+.icon-btn {
+  width: 36px; height: 36px;
+  border-radius: var(--r-2);
+  background: var(--glass-1);
+  backdrop-filter: blur(30px) saturate(180%);
+  -webkit-backdrop-filter: blur(30px) saturate(180%);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.10) inset;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink-2);
+  transition: all 0.15s ease;
+}
+.icon-btn:hover {
+  background: var(--glass-2);
+  color: var(--ink-1);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.18) inset;
+}
+.icon-btn.active {
+  background: var(--indigo);
+  color: white;
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.20) inset;
+}
+
+/* Center workspace — where transcript / vocab / settings views live */
+.workspace {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 40px 140px;
+  overflow: hidden;
+}
+
+.view {
+  display: none;
+  width: 100%;
+  max-width: 720px;
+  max-height: calc(100vh - 240px);
+}
+.view.active {
+  display: flex;
+  flex-direction: column;
+  animation: stepIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.view-card {
+  /* glass-strong applied via class */
+  padding: 24px 28px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  flex: 1;
+}
+
+.view-title {
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin-bottom: 6px;
+}
+.view-sub {
+  font-size: 12px;
+  color: var(--ink-3);
+  margin-bottom: 18px;
+  line-height: 1.5;
+}
+
+/* Transcript feed inside the view-card */
+.feed {
+  flex: 1;
+  overflow-y: auto;
+  padding-right: 6px;
+}
+.feed-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  gap: 10px;
+}
+.feed-empty-text {
+  font-size: 13px;
+  color: var(--ink-3);
+}
+
+.entry {
+  padding: 12px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+.entry:last-child { border-bottom: none; }
+.entry-meta {
+  display: flex;
+  gap: 10px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--ink-4);
+  margin-bottom: 4px;
+}
+.entry-app { color: var(--violet); }
+.entry-text {
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--ink-1);
+}
+.entry.streaming { opacity: 0.85; }
+.entry.streaming .entry-text { color: var(--ink-2); }
+.cursor-blink {
+  animation: blink 0.8s step-end infinite;
+  color: var(--violet);
+  font-weight: 300;
+}
+@keyframes blink { 50% { opacity: 0; } }
+.streaming-dot {
+  color: var(--violet);
+  animation: blink 1s ease-in-out infinite;
+  font-size: 10px;
+}
+.word-fade {
+  animation: wordIn 0.15s ease-out;
+}
+@keyframes wordIn {
+  from { opacity: 0; transform: translateY(2px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================================
+   THE DOCK — floating bottom bar (Mode | Mic | Settings)
+   ============================================================ */
+
+.dock {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 14px;
+  border-radius: 22px;
+  z-index: 60;
+}
+/* glass-strong applied via class */
+
+/* Mode segmented control */
+.mode-pills {
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  background: rgba(0, 0, 0, 0.20);
+  border-radius: 14px;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08) inset;
+}
+.mode-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border-radius: 11px;
+  font-size: 12px;
+  font-weight: 510;
+  color: var(--ink-3);
+  transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.mode-pill:hover { color: var(--ink-1); }
+.mode-pill.active {
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--ink-1);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.16) inset,
+    0 2px 6px rgba(0, 0, 0, 0.30);
+}
+.mode-pill i { width: 13px; height: 13px; }
+
+/* The big mic — center of the dock */
+.mic-btn {
+  width: 56px; height: 56px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #d49a4a 0%, #f4c47a 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #2a1a08;
+  position: relative;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.30) inset,
+    0 1px 0 rgba(255, 255, 255, 0.40) inset,
+    0 8px 28px rgba(212, 154, 74, 0.55),
+    0 0 0 0 rgba(212, 154, 74, 0);
+}
+.mic-btn:hover {
+  transform: translateY(-2px) scale(1.04);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.35) inset,
+    0 1px 0 rgba(255, 255, 255, 0.45) inset,
+    0 12px 36px rgba(212, 154, 74, 0.65),
+    0 0 0 6px rgba(212, 154, 74, 0.25);
+}
+.mic-btn:active { transform: translateY(0) scale(1.02); }
+.mic-btn i { width: 22px; height: 22px; }
+
+.mic-btn.recording {
+  background: linear-gradient(135deg, #f08585, #e96565);
+  animation: micPulse 1.4s ease-in-out infinite;
+}
+@keyframes micPulse {
+  0%, 100% {
+    box-shadow:
+      0 0 0 1px rgba(255, 255, 255, 0.25) inset,
+      0 8px 28px rgba(240, 133, 133, 0.50),
+      0 0 0 0 rgba(240, 133, 133, 0.55);
+  }
+  50% {
+    box-shadow:
+      0 0 0 1px rgba(255, 255, 255, 0.30) inset,
+      0 8px 28px rgba(240, 133, 133, 0.60),
+      0 0 0 14px rgba(240, 133, 133, 0);
+  }
+}
+
+/* Status row right of mic */
+.dock-status {
+  display: flex;
+  flex-direction: column;
+  min-width: 110px;
+  padding: 0 6px;
+}
+.dock-status-line1 {
+  font-size: 11px;
+  font-weight: 510;
+  color: var(--ink-1);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.dock-status-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--ok);
+  flex-shrink: 0;
+}
+.dock-status-dot.recording {
+  background: var(--err);
+  animation: dotPulse 1.4s ease infinite;
+}
+@keyframes dotPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+.dock-status-line2 {
+  font-size: 10px;
+  color: var(--ink-3);
+  font-family: var(--font-mono);
+  margin-top: 3px;
+}
+
+/* Quick view selector — left of dock */
+.dock-views {
+  display: flex;
+  gap: 4px;
+}
+.dock-view-btn {
+  width: 32px; height: 32px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink-3);
+  transition: all 0.15s ease;
+}
+.dock-view-btn:hover {
+  background: rgba(255, 255, 255, 0.10);
+  color: var(--ink-1);
+}
+.dock-view-btn.active {
+  background: rgba(255, 255, 255, 0.14);
+  color: var(--ink-1);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.18) inset;
+}
+.dock-view-btn i { width: 14px; height: 14px; }
+
+.dock-divider {
+  width: 1px;
+  height: 28px;
+  background: rgba(255, 255, 255, 0.16);
+}
+
+/* ============================================================
+   Settings, Vocab, History — same view-card layout
+   ============================================================ */
+
+.input {
+  padding: 8px 12px;
+  background: rgba(0, 0, 0, 0.25);
+  border-radius: var(--r-1);
+  color: var(--ink-1);
+  font-size: 12px;
+  flex: 1;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.14) inset;
+  transition: all 0.15s ease;
+}
+.input:focus {
+  background: rgba(0, 0, 0, 0.35);
+  box-shadow:
+    0 0 0 1px var(--indigo) inset,
+    0 0 0 3px rgba(108, 124, 224, 0.30);
+}
+
+.vocab-add {
+  display: flex; align-items: center; gap: 8px;
+  margin-bottom: 14px;
+}
+
+.vocab-list {
+  flex: 1;
+  overflow-y: auto;
+}
+.vocab-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 0;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--ink-2);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+.vocab-row .arrow { color: var(--violet); }
+
+.settings-section {
+  padding: 18px 20px;
+  border-radius: var(--r-2);
+  background: rgba(255, 255, 255, 0.04);
+  margin-bottom: 12px;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.10) inset;
+}
+.settings-section-title {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-4);
+  margin-bottom: 12px;
+}
+.setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  gap: 14px;
+}
+.setting-row:first-of-type { border-top: none; }
+.setting-label { flex: 1; min-width: 0; }
+.setting-name {
+  font-size: 13px;
+  font-weight: 510;
+  color: var(--ink-1);
+}
+.setting-desc {
+  font-size: 11px;
+  color: var(--ink-3);
+  margin-top: 2px;
+  line-height: 1.4;
+}
+
+/* Switch */
+.switch { position: relative; width: 32px; height: 19px; flex-shrink: 0; }
+.switch input { display: none; }
+.switch-track {
+  position: absolute; inset: 0;
+  background: rgba(0, 0, 0, 0.30);
+  border-radius: 9999px;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.16) inset;
+}
+.switch-track::before {
+  content: "";
+  position: absolute;
+  width: 13px; height: 13px;
+  left: 2px; top: 2px;
+  background: rgba(255, 255, 255, 0.78);
+  border-radius: 50%;
+  transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.switch input:checked + .switch-track {
+  background: var(--indigo);
+  box-shadow: 0 0 0 1px var(--indigo) inset;
+}
+.switch input:checked + .switch-track::before {
+  transform: translateX(13px);
+  background: white;
+}
+
+/* Select */
+.select {
+  padding: 7px 28px 7px 12px;
+  background: rgba(0, 0, 0, 0.25);
+  border-radius: var(--r-1);
+  color: var(--ink-1);
+  font-size: 12px;
+  cursor: pointer;
+  appearance: none;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.14) inset;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10'><path d='M2 4l3 3 3-3' stroke='rgba(255,255,255,0.6)' stroke-width='1.5' fill='none'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  min-width: 220px;
+}
+
+/* Quality picker pills */
+.quality-row {
+  display: flex;
+  gap: 8px;
+  padding: 4px 0 8px;
+}
+.quality-pill {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 14px 10px;
+  border-radius: var(--r-2);
+  background: rgba(255, 255, 255, 0.04);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.10) inset;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  text-align: center;
+}
+.quality-pill:hover {
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.18) inset;
+}
+.quality-pill.active {
+  background: rgba(212, 154, 74, 0.15);
+  box-shadow: 0 0 0 1.5px var(--indigo) inset;
+}
+.q-icon { font-size: 16px; line-height: 1; }
+.q-label { font-size: 12px; font-weight: 600; color: var(--ink-1); }
+.q-desc  { font-size: 10px; color: var(--ink-3); line-height: 1.3; }
+
+/* File drop zone */
+.drop-zone {
+  border-radius: var(--r-2);
+  padding: 48px 24px;
+  text-align: center;
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.04);
+  box-shadow: 0 0 0 1.5px dashed rgba(255, 255, 255, 0.20) inset;
+  transition: all 0.18s ease;
+  margin-bottom: 14px;
+}
+.drop-zone:hover {
+  background: rgba(108, 124, 224, 0.10);
+  box-shadow: 0 0 0 1.5px dashed var(--indigo) inset;
+}
+.drop-zone-icon {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 12px;
+  color: var(--ink-3);
+}
+.drop-zone-title {
+  font-size: 14px;
+  font-weight: 510;
+  color: var(--ink-1);
+  margin-bottom: 4px;
+}
+.drop-zone-sub {
+  font-size: 11px;
+  color: var(--ink-4);
+}
+</style>
+</head>
+
+<body>
+
+<!-- ========================= ONBOARDING ========================= -->
+<div id="onboarding">
+  <div class="onb-card glass">
+    <div class="onb-progress">
+      <span class="onb-dot active" data-step="0"></span>
+      <span class="onb-dot" data-step="1"></span>
+      <span class="onb-dot" data-step="2"></span>
+      <span class="onb-dot" data-step="3"></span>
+      <span class="onb-dot" data-step="4"></span>
+    </div>
+
+    <!-- Step 0: Welcome -->
+    <div class="onb-step active" data-step="0">
+      <div class="logo-mark">F</div>
+      <h1 class="display">Flow</h1>
+      <p class="lead">Your thoughts, typed instantly — in any app, offline, private. Press a key, speak, release.</p>
+      <ul class="feature-list">
+        <li><i data-lucide="wifi-off" style="width:14px;height:14px"></i>100% offline — works on a plane, no account needed.</li>
+        <li><i data-lucide="layout-grid" style="width:14px;height:14px"></i>Works in every app — email, Slack, docs, code editors.</li>
+        <li><i data-lucide="brain" style="width:14px;height:14px"></i>Adapts to context — formal in email, casual in chat.</li>
+        <li><i data-lucide="sparkles" style="width:14px;height:14px"></i>Learns your words after two corrections. Automatically.</li>
+      </ul>
+      <button class="btn-primary" onclick="next()">
+        Set up in 2 minutes <i data-lucide="arrow-right" style="width:14px;height:14px"></i>
+      </button>
+    </div>
+
+    <!-- Step 1: Permissions -->
+    <div class="onb-step" data-step="1">
+      <h2 class="heading">Grant permissions</h2>
+      <p class="body">Flow needs your microphone and the ability to type into other apps.</p>
+      <div class="perm-list">
+        <div class="perm-item" id="perm-mic">
+          <div class="perm-icon"><i data-lucide="mic" style="width:15px;height:15px"></i></div>
+          <div class="perm-meta">
+            <div class="perm-title">Microphone</div>
+            <div class="perm-desc">Capture your voice while recording</div>
+          </div>
+          <button id="perm-mic-btn" class="perm-action" onclick="grantMic()">Grant</button>
+        </div>
+        <div class="perm-item" id="perm-acc">
+          <div class="perm-icon"><i data-lucide="keyboard" style="width:15px;height:15px"></i></div>
+          <div class="perm-meta">
+            <div class="perm-title">Accessibility</div>
+            <div class="perm-desc">Type into the focused application</div>
+          </div>
+          <button id="perm-acc-btn" class="perm-action" onclick="grantAcc()">Grant</button>
+        </div>
+      </div>
+      <button id="perm-continue" class="btn-primary" onclick="next()" disabled>
+        Continue <i data-lucide="arrow-right" style="width:14px;height:14px"></i>
+      </button>
+    </div>
+
+    <!-- Step 2: Benchmark -->
+    <div class="onb-step" data-step="2">
+      <h2 class="heading">Tuning for your machine</h2>
+      <p class="body">Finding the optimal compute settings for your CPU.</p>
+      <div class="bench-status">
+        <div class="spinner"></div>
+        <div class="bench-text" id="bench-text">Initialising…</div>
+      </div>
+      <button id="bench-continue" class="btn-primary" onclick="next()" disabled>
+        Continue <i data-lucide="arrow-right" style="width:14px;height:14px"></i>
+      </button>
+    </div>
+
+    <!-- Step 3: Practice -->
+    <div class="onb-step" data-step="3">
+      <h2 class="heading">Try it</h2>
+      <p class="body">Click the mic below, say the phrase, then click it again to stop:</p>
+
+      <!-- Inline mic button for practice (dock isn't visible yet) -->
+      <div style="display:flex;justify-content:center;margin:16px 0 12px;">
+        <button class="mic-btn" id="practice-mic" onclick="toggleRecording()" style="width:52px;height:52px;">
+          <i data-lucide="mic" style="width:20px;height:20px"></i>
+        </button>
+      </div>
+
+      <div class="practice-prompt">"Hello Flow, this is my first dictation."</div>
+      <div class="practice-result" id="practice-result">Waiting for you to speak…</div>
+      <button class="btn-primary" onclick="next()">
+        Done <i data-lucide="arrow-right" style="width:14px;height:14px"></i>
+      </button>
+    </div>
+
+    <!-- Step 4: Done -->
+    <div class="onb-step" data-step="4">
+      <div class="check-mark"><i data-lucide="check" style="width:22px;height:22px"></i></div>
+      <h2 class="heading">You're ready</h2>
+      <p class="body" style="margin-bottom:16px">Your shortcut is live. Here's what you can do:</p>
+      <ul class="feature-list" style="margin-bottom:20px">
+        <li><i data-lucide="mic" style="width:14px;height:14px"></i><b>Alt + Space</b> → speak → release. Text appears at your cursor.</li>
+        <li><i data-lucide="repeat-2" style="width:14px;height:14px"></i>Say <b>"scratch that"</b> to undo the last dictation.</li>
+        <li><i data-lucide="bookmark" style="width:14px;height:14px"></i><b>Double-tap</b> the shortcut → capture mode. Saves to notes, inserts nothing.</li>
+        <li><i data-lucide="sparkles" style="width:14px;height:14px"></i>Say <b>"polish that"</b> to rewrite with AI (enable in Settings).</li>
+      </ul>
+      <button class="btn-primary" onclick="finishOnboarding()">Start using Flow</button>
+    </div>
+  </div>
+</div>
+
+<!-- ========================= MAIN APP ========================= -->
+<div id="main" class="hidden">
+
+  <!-- Top bar -->
+  <header class="topbar">
+    <div class="topbar-brand">
+      <div class="logo-mark">F</div>
+      <span class="brand-name">Flow</span>
+    </div>
+    <div class="topbar-actions">
+      <button class="icon-btn" onclick="detachToMini()" title="Float — minimise to mini bar while using other apps">
+        <i data-lucide="picture-in-picture-2" style="width:15px;height:15px"></i>
+      </button>
+      <button class="icon-btn" onclick="switchView('settings')" title="Settings">
+        <i data-lucide="settings" style="width:15px;height:15px"></i>
+      </button>
+    </div>
+  </header>
+
+  <!-- Workspace -->
+  <main class="workspace">
+
+    <!-- TRANSCRIPT -->
+    <section class="view active" data-view="transcript">
+      <div class="view-card glass-strong">
+        <h1 class="view-title">Transcript</h1>
+        <p class="view-sub">Your dictations and meeting transcripts. Click the mic in the dock below to record.</p>
+        <div class="feed" id="feed">
+          <div class="feed-empty" id="feed-empty-state">
+            <div style="font-size:28px;margin-bottom:10px;opacity:0.5">⌨</div>
+            <div class="feed-empty-text" style="margin-bottom:6px">Press <span class="kbd">Alt + Space</span> and speak</div>
+            <div style="font-size:11px;color:var(--ink-4);line-height:1.6">
+              Your words appear at your cursor — in any app.<br>
+              Double-tap to capture thoughts without inserting.
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- VOCABULARY -->
+    <section class="view" data-view="vocab">
+      <div class="view-card glass-strong">
+        <h1 class="view-title">Vocabulary</h1>
+        <p class="view-sub">Heard-as → should-be replacements applied to every transcription.</p>
+        <div class="vocab-add">
+          <input id="vocab-wrong" placeholder="Heard as…" class="input">
+          <i data-lucide="arrow-right" style="width:14px;height:14px;color:var(--ink-4)"></i>
+          <input id="vocab-right" placeholder="Should be…" class="input">
+          <button class="btn-primary" style="margin-top:0;padding:7px 14px" onclick="addVocab()">Add</button>
+        </div>
+        <div class="vocab-list" id="vocab-list">
+          <div class="feed-empty"><div class="feed-empty-text">No replacements yet</div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- FILES -->
+    <section class="view" data-view="files">
+      <div class="view-card glass-strong">
+        <h1 class="view-title">Files</h1>
+        <p class="view-sub">Drop an audio or video file to transcribe. Or paste a YouTube URL.</p>
+
+        <div class="drop-zone" id="drop-zone"
+             ondragover="event.preventDefault(); event.currentTarget.style.background='rgba(108,124,224,0.15)';"
+             ondragleave="event.currentTarget.style.background='rgba(255,255,255,0.04)';"
+             ondrop="handleDrop(event)"
+             onclick="browseAndTranscribe()">
+          <div class="drop-zone-icon"><i data-lucide="upload-cloud" style="width:32px;height:32px"></i></div>
+          <div class="drop-zone-title">Drop file or click to browse</div>
+          <div class="drop-zone-sub">MP3 · WAV · M4A · MP4 · MOV · OGG · WebM</div>
+        </div>
+
+        <div class="vocab-add">
+          <input id="url-input" placeholder="Paste YouTube or podcast URL…" class="input">
+          <button class="btn-primary" style="margin-top:0;padding:7px 14px" onclick="handleUrl()">Transcribe</button>
+        </div>
+
+        <div id="file-result" class="hidden" style="padding:14px;background:rgba(255,255,255,0.04);border-radius:8px;font-size:13px;color:var(--ink-1);box-shadow:0 0 0 1px rgba(255,255,255,0.10) inset;"></div>
+      </div>
+    </section>
+
+    <!-- HISTORY -->
+    <section class="view" data-view="history">
+      <div class="view-card glass-strong">
+        <h1 class="view-title">History</h1>
+        <p class="view-sub">Every transcript, searchable. Local only.</p>
+        <input id="search-input" placeholder="Search transcripts…" class="input" style="margin-bottom:14px;flex:none;width:100%" oninput="handleSearch(event)">
+        <div class="vocab-list" id="history-list"></div>
+      </div>
+    </section>
+
+    <!-- THOUGHTS (capture mode) -->
+    <section class="view" data-view="thoughts">
+      <div class="view-card glass-strong">
+        <h1 class="view-title">Thoughts</h1>
+        <p class="view-sub">Double-tap <span class="kbd">Alt + Space</span> to enter capture mode — speak freely without inserting anywhere.</p>
+        <div class="vocab-list" id="thoughts-list">
+          <div class="feed-empty">
+            <div style="font-size:24px;margin-bottom:8px;opacity:0.4">💭</div>
+            <div class="feed-empty-text">No captured thoughts yet</div>
+            <div style="font-size:11px;color:var(--ink-4);margin-top:4px">Double-tap your shortcut to enter capture mode</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SETTINGS -->
+    <section class="view" data-view="settings">
+      <div class="view-card glass-strong" style="overflow-y:auto">
+        <h1 class="view-title">Settings</h1>
+        <p class="view-sub">All settings stored locally — nothing leaves your device.</p>
+
+        <!-- Quality picker — no model names exposed to user -->
+        <div class="settings-section">
+          <div class="settings-section-title">Accuracy</div>
+          <div class="quality-row">
+            <button class="quality-pill" id="q-parakeet" data-model="parakeet-tdt-0.6b-v3" onclick="setQuality('parakeet')">
+              <span class="q-icon">⚡</span>
+              <span class="q-label">Parakeet</span>
+              <span class="q-desc">37x RTFx · Metal GPU · NVIDIA</span>
+            </button>
+            <button class="quality-pill" id="q-fast" data-model="tiny.en" onclick="setQuality('fast')">
+              <span class="q-icon">◦</span>
+              <span class="q-label">Fast</span>
+              <span class="q-desc">Instant on any laptop</span>
+            </button>
+            <button class="quality-pill" id="q-balanced" data-model="distil-medium.en" onclick="setQuality('balanced')">
+              <span class="q-icon">◎</span>
+              <span class="q-label">Balanced</span>
+              <span class="q-desc">Best for most people</span>
+            </button>
+            <button class="quality-pill" id="q-best" data-model="distil-large-v3" onclick="setQuality('best')">
+              <span class="q-icon">✦</span>
+              <span class="q-label">Best</span>
+              <span class="q-desc">Highest accuracy</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <div class="settings-section-title">Behaviour</div>
+          <div class="setting-row">
+            <div class="setting-label">
+              <div class="setting-name">Shortcut</div>
+              <div class="setting-desc">Press to start, press to stop</div>
+            </div>
+            <input type="text" id="set-hotkey" class="input" style="width:180px;font-family:var(--font-mono);font-size:11px">
+          </div>
+          <div class="setting-row">
+            <div class="setting-label">
+              <div class="setting-name">Sound cues</div>
+              <div class="setting-desc">Beep when recording starts and stops</div>
+            </div>
+            <label class="switch"><input type="checkbox" id="set-sound" checked><span class="switch-track"></span></label>
+          </div>
+          <div class="setting-row">
+            <div class="setting-label">
+              <div class="setting-name">AI clean-up</div>
+              <div class="setting-desc">Fix fillers, punctuation, capitalization automatically</div>
+            </div>
+            <label class="switch"><input type="checkbox" id="set-regex" checked><span class="switch-track"></span></label>
+          </div>
+          <div class="setting-row">
+            <div class="setting-label">
+              <div class="setting-name">Spell check</div>
+              <div class="setting-desc">Auto-correct common typos in your transcription</div>
+            </div>
+            <label class="switch"><input type="checkbox" id="set-spell" checked><span class="switch-track"></span></label>
+          </div>
+        </div>
+
+        <!-- Microphone -->
+        <div class="settings-section">
+          <div class="settings-section-title">Microphone</div>
+          <div class="setting-row">
+            <div class="setting-label">
+              <div class="setting-name">Input device</div>
+              <div class="setting-desc">Which mic to use for dictation</div>
+            </div>
+            <select id="set-mic" class="input" style="width:200px" onchange="setMic(this.value)">
+              <option value="default">System default</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- System -->
+        <div class="settings-section">
+          <div class="settings-section-title">System</div>
+          <div class="setting-row">
+            <div class="setting-label">
+              <div class="setting-name">Launch at login</div>
+              <div class="setting-desc">Flow starts automatically when you log in</div>
+            </div>
+            <label class="switch"><input type="checkbox" id="set-login" onchange="setLoginToggle(this.checked)"><span class="switch-track"></span></label>
+          </div>
+        </div>
+
+        <!-- Model downloads -->
+        <div class="settings-section" id="model-download-section">
+          <div class="settings-section-title">Models</div>
+          <div id="model-download-list"></div>
+        </div>
+
+        <!-- Advanced — hidden by default, for power users -->
+        <details style="margin-top:8px">
+          <summary style="font-size:11px;color:var(--ink-4);cursor:pointer;padding:8px 0;list-style:none;display:flex;align-items:center;gap:6px">
+            <i data-lucide="settings-2" style="width:12px;height:12px"></i> Advanced
+          </summary>
+          <div class="settings-section" style="margin-top:8px">
+            <div class="settings-section-title">Engine tuning</div>
+            <div class="setting-row">
+              <div class="setting-label">
+                <div class="setting-name">Compute</div>
+                <div class="setting-desc">Workers × threads (auto-tuned on first run)</div>
+              </div>
+              <div style="display:flex;gap:6px;align-items:center">
+                <input type="number" id="set-workers" class="input" min="1" max="4" value="2" style="width:50px;text-align:center;flex:none">
+                <span style="color:var(--ink-4)">×</span>
+                <input type="number" id="set-threads" class="input" min="1" max="8" value="3" style="width:50px;text-align:center;flex:none">
+              </div>
+            </div>
+            <div class="setting-row">
+              <div class="setting-label">
+                <div class="setting-name">AI polish</div>
+                <div class="setting-desc">Say <span class="kbd">polish that</span> to rewrite with LLM</div>
+              </div>
+              <label class="switch"><input type="checkbox" id="set-llm"><span class="switch-track"></span></label>
+            </div>
+            <div class="setting-row">
+              <div class="setting-label">
+                <div class="setting-name">App context</div>
+                <div class="setting-desc">Tag transcriptions with the active app name</div>
+              </div>
+              <label class="switch"><input type="checkbox" id="set-context" checked><span class="switch-track"></span></label>
+            </div>
+          </div>
+        </details>
+      </div>
+    </section>
+  </main>
+
+  <!-- THE DOCK -->
+  <div class="dock glass-strong">
+    <!-- Mode pills (left) -->
+    <div class="mode-pills">
+      <button id="mode-dictation" class="mode-pill active" onclick="setMode('dictation')">
+        <i data-lucide="mic"></i>
+        Dictate
+      </button>
+      <button id="mode-meeting" class="mode-pill" onclick="setMode('meeting')">
+        <i data-lucide="users"></i>
+        Meeting
+      </button>
+      <button id="mode-capture" class="mode-pill" onclick="setMode('capture')" title="Save thoughts without inserting (or double-tap hotkey)">
+        <i data-lucide="bookmark"></i>
+        Capture
+      </button>
+    </div>
+
+    <div class="dock-divider"></div>
+
+    <!-- Mic button (center) -->
+    <button class="mic-btn" id="mic-button" onclick="toggleRecording()">
+      <i data-lucide="mic"></i>
+    </button>
+
+    <div class="dock-divider"></div>
+
+    <!-- Status (right) -->
+    <div class="dock-status">
+      <div class="dock-status-line1">
+        <span class="dock-status-dot" id="status-dot"></span>
+        <span id="status-text">Ready</span>
+      </div>
+      <div class="dock-status-line2" id="status-meta">parakeet-tdt-0.6b-v3</div>
+    </div>
+
+    <div class="dock-divider"></div>
+
+    <!-- View switcher (right of dock) -->
+    <div class="dock-views">
+      <button class="dock-view-btn active" data-view="transcript" onclick="switchView('transcript')" title="Transcript">
+        <i data-lucide="message-square"></i>
+      </button>
+      <button class="dock-view-btn" data-view="vocab" onclick="switchView('vocab')" title="Vocabulary">
+        <i data-lucide="book-open"></i>
+      </button>
+      <button class="dock-view-btn" data-view="files" onclick="switchView('files')" title="Files">
+        <i data-lucide="upload"></i>
+      </button>
+      <button class="dock-view-btn" data-view="history" onclick="switchView('history')" title="History">
+        <i data-lucide="history"></i>
+      </button>
+      <button class="dock-view-btn" data-view="thoughts" onclick="switchView('thoughts')" title="Captured Thoughts">
+        <i data-lucide="bookmark"></i>
+      </button>
+    </div>
+  </div>
+</div>
+
+<script src="app.js"></script>
+<script>
+  function refreshIcons() { if (window.lucide) lucide.createIcons(); }
+  document.addEventListener("DOMContentLoaded", refreshIcons);
+</script>
+</body>
+</html>

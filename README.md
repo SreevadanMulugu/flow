@@ -1,270 +1,198 @@
 # Flow — Offline Speech-to-Text Dictation
 
-Flow is a fully offline, low-latency speech-to-text dictation app that types into any application on your Mac. Press a hotkey to start, speak, release to stop — your words appear at the cursor instantly.
+Fully offline, low-latency dictation app. Press a hotkey → speak → words appear at your cursor. No cloud. No subscription. Runs entirely on-device using NVIDIA Parakeet TDT 0.6B v3.
 
-No cloud. No subscription. Runs entirely on-device.
+Auto-detects the best inference backend for your hardware — from Apple Neural Engine to NVIDIA CUDA to quantized CPU.
+
+---
+
+## Performance by Platform
+
+| Platform | Backend | RTFx | Notes |
+|---|---|---|---|
+| Apple Silicon (M1–M4) | CoreML (ANE) | ~110x | Recommended |
+| Apple Silicon (M1–M4) | PyTorch MPS | ~37x | Fallback if CoreML unavailable |
+| NVIDIA GPU (Linux/Windows) | NeMo CUDA + ONNX | ~60–100x | True frame-by-frame streaming |
+| AMD GPU (Linux) | ONNX ROCm | ~35x | |
+| Intel/AMD GPU (Windows) | ONNX DirectML | ~20–30x | |
+| Any CPU | ONNX INT8 | ~8–15x | Quantized, works everywhere |
+
+RTFx = real-time factor. 10x = a 10s clip transcribed in 1s.
 
 ---
 
 ## Features
 
-- **Global dictation** — works in any app: email, Slack, VS Code, terminals, browsers
-- **Hotkey control** — press Alt+Space to start/stop recording
-- **Three modes**
-  - *Dictation* — inserts text at cursor in the focused app
-  - *Meeting* — continuous transcript capture
-  - *Capture* — records thoughts without inserting text (double-tap hotkey)
-- **Voice commands**
-  - `"scratch that"` — undo the last dictation
-  - `"polish that"` — rewrite with local LLM (optional)
-- **Model tiers** — Fast (tiny.en), Balanced (distil-medium.en), Best (distil-large-v3)
-- **Custom vocabulary** — heard-as → should-be replacements, auto-learned after 2 corrections
-- **File & URL transcription** — drop audio/video files or paste a YouTube URL
-- **Transcript history** — searchable local log of every dictation, tagged by source app
-- **Captured thoughts** — separate vault for voice memos
-- **Real-time metrics** — live RTFx (real-time factor) and word count per session
-- **Mini bar** — 220×52 px floating window for always-on-top access
+- **Global dictation** — works in any app: email, Slack, VS Code, browsers
+- **Hotkey control** — Alt+Space to start/stop
+- **Three modes** — Dictation (types at cursor), Meeting (continuous transcript), Capture (voice notes)
+- **Real-time streaming** — words appear as you speak, not after silence
+- **Multilingual** — auto-detects language per utterance, 25 languages, script-locks to prevent mid-sentence flipping
+- **Sentence-aware turn detection** — commits on acoustic silence and linguistic sentence boundaries
+- **Custom vocabulary** — heard-as → should-be replacements, auto-learned
+- **Transcript history** — searchable local log
+- **Mini bar** — 220×52 px floating overlay
 
 ---
 
 ## Architecture
 
 ```
-┌─────────────────────────────┐
-│   Tauri Shell (Rust)        │  Window management, system tray,
-│   src-tauri/                │  hotkey pass-through, sidecar spawn
-└──────────────┬──────────────┘
-               │  spawns
-┌──────────────▼──────────────┐
-│   flow_server (Python)      │  HTTP + WebSocket server on localhost
-│   (bundled binary)          │  Whisper inference, audio capture,
-│                             │  vocabulary, history, text injection
-└──────────────┬──────────────┘
-               │  HTTP / WS
-┌──────────────▼──────────────┐
-│   UI  (HTML / JS / CSS)     │  Main window + floating mini bar
-│   ui/                       │  Vanilla JS, zero JS framework deps
-└─────────────────────────────┘
+┌──────────────────────────────┐
+│   Tauri Shell (Rust)         │  Window management, system tray,
+│   src-tauri/                 │  sidecar spawn, hotkey pass-through
+└──────────────┬───────────────┘
+               │ spawns
+┌──────────────▼───────────────┐
+│   flow_server (Python)       │  FastAPI + WebSocket server
+│   engine/flow_server.py      │  Audio capture, streaming, history
+└──────────────┬───────────────┘
+               │ spawns
+┌──────────────▼───────────────┐
+│   parakeet_worker            │  Auto-routing inference worker
+│   engine/workers/            │
+│   ├── backend_detect.py      │  Hardware fingerprint at startup
+│   ├── backend_coreml.py      │  Apple ANE via CoreML (~110x RTFx)
+│   ├── backend_nemo_cuda.py   │  NVIDIA true streaming (~70x RTFx)
+│   ├── backend_nemo_mps.py    │  Apple MPS via PyTorch (~37x RTFx)
+│   └── backend_onnx.py        │  ONNX Runtime quantized (~10–60x)
+└──────────────────────────────┘
 ```
 
-**How it works end-to-end:**
-
-1. Tauri starts the bundled `flow_server` sidecar and reads its port from `~/.flow/port`
-2. The main window and mini bar both load from the Python HTTP server
-3. JavaScript calls `/api/<method>` (POST/JSON) for commands
-4. Real-time word streaming and state updates come over a WebSocket (`/ws`)
-5. If WebSocket is unavailable, the frontend falls back to 800 ms HTTP polling
+**Streaming pipeline:**
+- Audio captured at 16kHz, transcribed every 0.5s (rolling window)
+- Script family (Latin/Cyrillic/etc.) detected on first result, locked per utterance
+- Sentence-ending punctuation halves the silence wait for faster commits
+- NVIDIA CUDA: true `conformer_stream_step` streaming (NeMo official API)
+- Mac/CPU: LocalAgreement-2 sliding window approximation
 
 ---
 
-## Project Structure
+## Installation
 
-```
-flow/
-├── ui/                        # Frontend — static HTML/JS/CSS
-│   ├── index.html             # Main app + 5-step onboarding flow
-│   ├── mini_bar.html          # Floating 220×52 control bar
-│   ├── app.js                 # All UI logic (~850 lines, vanilla JS)
-│   ├── style.css              # Glass-morphism design system
-│   ├── bg.jpeg                # Background image
-│   ├── lucide.min.js          # Icons (bundled, offline)
-│   ├── InterVariable.woff2    # Inter font (bundled)
-│   └── InterVariable-Italic.woff2
-│
-├── src-tauri/                 # Tauri Rust shell
-│   ├── src/
-│   │   ├── main.rs            # Entry point
-│   │   └── lib.rs             # Window setup, tray, sidecar spawning
-│   ├── capabilities/
-│   │   └── default.json       # Tauri permission grants
-│   ├── icons/                 # App icons (all sizes)
-│   ├── tauri.conf.json        # App identifier, bundle config
-│   ├── Cargo.toml             # Rust dependencies
-│   ├── Cargo.lock
-│   └── build.rs
-│
-├── package.json               # Tauri CLI npm wrapper
-└── README.md
-```
-
-> **Note:** `src-tauri/binaries/` (the compiled `flow_server` Python executable) is excluded from git. Build it separately — see [Building the sidecar](#building-the-sidecar).
-
----
-
-## Getting Started
-
-### Prerequisites
-
-- [Rust](https://rustup.rs/) (stable)
-- [Node.js](https://nodejs.org/) ≥ 18
-- [Tauri CLI v2](https://tauri.app/start/prerequisites/)
-
-### Run in development
+### macOS — Apple Silicon (recommended)
 
 ```bash
-# Install Tauri CLI
+# Prerequisites
+brew install python@3.10 node rust
+
+git clone https://github.com/SreevadanMulugu/flow.git
+cd flow
+bash scripts/setup_mac.sh
 npm install
-
-# Place a dev build of flow_server into src-tauri/binaries/
-# (see Building the sidecar below)
-
-# Start dev mode
-npm run dev
+npm run tauri dev
 ```
 
-### Build for production
+First launch downloads the CoreML model (~800MB) automatically. Subsequent launches are instant.
+
+### macOS — Intel
+
+Same steps. Uses NeMo MPS or CPU backend (~8–15x RTFx).
+
+### Linux — NVIDIA GPU
 
 ```bash
-npm run build
+# Prerequisites: CUDA 12.1+, Python 3.10+, Node.js 18+, Rust
+git clone https://github.com/SreevadanMulugu/flow.git
+cd flow
+bash scripts/setup_linux.sh   # installs NeMo, exports ONNX INT8 (~5 min)
+npm install
+npm run tauri dev
 ```
 
-The `.app` bundle will be in `src-tauri/target/release/bundle/macos/`.
+Uses NeMo `conformer_stream_step` for true token-by-token streaming on CUDA.
+
+### Linux — CPU only
+
+```bash
+bash scripts/setup_linux.sh   # detects no GPU, installs ONNX CPU INT8
+```
+
+### Windows
+
+```powershell
+git clone https://github.com/SreevadanMulugu/flow.git
+cd flow
+.\scripts\setup_windows.ps1
+npm install
+npm run tauri dev
+```
+
+ONNX Runtime auto-selects: CUDA EP → DirectML EP → CPU EP.
 
 ---
 
-## Building the Sidecar
+## ONNX Model Export (Linux/Mac with NeMo)
 
-The Python backend (`flow_server`) is distributed as a standalone executable bundled inside the Tauri app. It is **not** included in this repository.
+Export the quantized model once — it then works everywhere:
 
-To build it:
+```bash
+# INT8 quantized (~600MB, recommended)
+python scripts/export_onnx.py --quantize
 
-1. Have the Python source for `flow_server` available
-2. Build a standalone binary with [PyInstaller](https://pyinstaller.org/):
-   ```bash
-   pyinstaller --onefile flow_server.py -n flow_server
-   ```
-3. Rename and place the output to match Tauri's expected triple:
-   ```bash
-   # macOS Apple Silicon
-   cp dist/flow_server src-tauri/binaries/flow_server-aarch64-apple-darwin
-   
-   # macOS Intel
-   cp dist/flow_server src-tauri/binaries/flow_server-x86_64-apple-darwin
-   ```
-
-The binary is loaded at runtime via the [Tauri sidecar API](https://tauri.app/develop/sidecar/).
-
----
-
-## API Reference
-
-The `flow_server` exposes a local HTTP + WebSocket API that the UI communicates with.
-
-### HTTP Endpoints (`POST /api/<method>`)
-
-| Method | Args | Returns | Description |
-|---|---|---|---|
-| `get_config` | — | config object | Settings + onboarding status |
-| `check_permissions` | — | `{mic, accessibility}` | Check macOS permission grants |
-| `trigger_mic_prompt` | — | — | Show system mic dialog |
-| `trigger_accessibility_prompt` | — | — | Show accessibility dialog |
-| `run_benchmark` | — | `{score}` | CPU benchmark for auto-tuning workers |
-| `finish_onboarding` | — | — | Mark onboarding complete |
-| `toggle_recording` | — | — | Start / stop microphone capture |
-| `set_mode` | `mode: "dictation"\|"meeting"\|"capture"` | — | Switch recording mode |
-| `update_config` | `{model, num_workers, threads_per_worker, hotkey, …}` | — | Save settings |
-| `get_state` | — | state object | Current recording state + transcriptions |
-| `get_stats` | — | `{words, time_str}` | Daily usage stats |
-| `pop_toast` | — | toast string | Speed hint or low-confidence tip |
-| `list_mics` | — | `[{index, name}]` | Available input devices |
-| `set_mic` | `device: int\|"default"` | — | Switch input device |
-| `set_launch_at_login` | `enabled: bool` | — | Auto-start on login |
-| `check_model_cached` | `modelId: string` | `{cached, size_mb}` | Check if model is downloaded |
-| `download_model` | `modelId: string` | — | Start model download |
-| `get_download_progress` | — | `{pct, done, error}` | Model download status |
-| `add_vocab` | `wrong: string, right: string` | — | Add custom replacement |
-| `get_vocab` | — | `{heard: should}` | All vocabulary replacements |
-| `get_history` | `limit?: int` | `[{ts, app, text}]` | Transcript history |
-| `search_history` | `q: string` | `[{ts, app, text}]` | Search transcripts |
-| `get_thoughts` | `limit?: int` | `[{ts, text}]` | Captured thoughts |
-| `transcribe_file` | `path: string` | `{ok, text, duration, rtfx, language}` | Transcribe audio/video file |
-| `transcribe_url` | `url: string` | same as above | Transcribe from URL |
-| `pick_file_via_dialog` | — | `{path}` | Open file picker |
-| `set_language` | `code: string` | — | Lock detection language (e.g. `"en"`) |
-| `dismiss_lang` | — | — | Dismiss language notification |
-| `detach_to_mini` | — | — | Switch to mini bar view |
-| `accept_suggestion` | `idx: int` | — | Accept vocabulary suggestion |
-| `reject_suggestion` | `idx: int` | — | Reject vocabulary suggestion |
-| `get_suggestions` | — | `[{wrong, right}]` | Pending vocab suggestions |
-
-### WebSocket (`/ws`)
-
-Two event types:
-
-```jsonc
-// Full state update
-{
-  "type": "state",
-  "data": {
-    "recording": false,
-    "mode": "dictation",
-    "status": "Ready",
-    "detected_lang": "en",
-    "last_rtfx": 4.2,
-    "transcriptions": [{ "time": "14:03", "app": "Slack", "text": "..." }],
-    "speed_toast": null,
-    "low_conf_tip": false
-  }
-}
-
-// Word stream (during active recording)
-{ "type": "words", "words": ["Hello", "world"] }
+# FP32 (~2.4GB, highest accuracy)
+python scripts/export_onnx.py
 ```
+
+Model saved to `~/.flow/models/parakeet-onnx/` and auto-detected on all platforms.
 
 ---
 
 ## Configuration
 
-Settings are stored in `~/.flow/config`. The following fields are user-configurable:
+`~/.flow/config.json`:
 
-| Key | Type | Default | Description |
-|---|---|---|---|
-| `model` | string | `"distil-medium.en"` | Whisper model ID |
-| `num_workers` | int | auto | Parallel inference workers |
-| `threads_per_worker` | int | auto | CPU threads per worker |
-| `hotkey` | string | `"alt+space"` | Global recording hotkey |
-| `regex_cleanup` | bool | `true` | Apply regex post-processing |
-| `spell_check` | bool | `false` | Spell-check transcriptions |
-| `llm_cleanup` | bool | `false` | Rewrite with local LLM |
-| `sound_feedback` | bool | `true` | Audible start/stop feedback |
-| `active_app_context` | bool | `true` | Tag transcriptions with source app |
+```json
+{
+  "model": "parakeet-tdt-0.6b-v3",
+  "language": "",        
+  "hotkey": "alt+space",
+  "mode": "dictation",
+  "active_app_context": true,
+  "regex_cleanup": true,
+  "spell_check": true
+}
+```
 
----
-
-## Whisper Models
-
-| ID | Size | Speed | Quality |
-|---|---|---|---|
-| `tiny.en` | ~75 MB | Fastest | Good for clear speech |
-| `distil-medium.en` | ~400 MB | Balanced | Recommended for most users |
-| `distil-large-v3` | ~750 MB | Slower | Best accuracy |
-
-Models are downloaded on first use and cached locally.
+`language`: `""` = auto-detect per utterance, `"en"` = force English, `"uk"` = force Ukrainian, etc.
 
 ---
 
-## Onboarding
+## Model
 
-First launch runs a 5-step guided setup:
+**NVIDIA Parakeet TDT 0.6B v3** — [nvidia/parakeet-tdt-0.6b-v3](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3)
+- 600M parameters, FastConformer encoder + Token Duration Transducer decoder
+- 85,000 hours training data across 25 languages
+- Word-level timestamps at 40ms granularity
+- Outperforms Whisper large-v3 on English benchmarks
 
-1. **Welcome** — overview of Flow
-2. **Permissions** — grant Microphone and Accessibility access
-3. **Benchmark** — auto-tunes `num_workers` and `threads_per_worker` to your hardware
-4. **Practice** — live test with the microphone
-5. **Done** — launches the main app
+CoreML (Apple Silicon): [FluidInference/parakeet-tdt-0.6b-v3-coreml](https://huggingface.co/FluidInference/parakeet-tdt-0.6b-v3-coreml)
 
 ---
 
-## Tech Stack
+## Hardware Requirements
 
-| Layer | Technology |
-|---|---|
-| Desktop shell | Tauri v2 (Rust) |
-| Frontend | Vanilla HTML / JS / CSS |
-| Icons | Lucide (bundled) |
-| Fonts | Inter Variable (bundled) |
-| Speech engine | Whisper (via Python sidecar) |
-| IPC | HTTP + WebSocket (localhost) |
+| | Minimum | Recommended |
+|---|---|---|
+| RAM | 4GB | 8GB+ |
+| Storage | 1GB (ONNX INT8) | 3GB (NeMo FP32) |
+| GPU | None (CPU works) | Apple M-series or NVIDIA RTX |
+| OS | macOS 13+, Ubuntu 22.04+, Windows 11 | macOS 14+ Apple Silicon |
+
+---
+
+## Development
+
+```bash
+# Check which backend your machine will use
+python engine/workers/backend_detect.py
+
+# Run server only (browser at http://localhost:PORT)
+python engine/flow_server.py
+
+# Full Tauri dev
+npm run tauri dev
+```
 
 ---
 

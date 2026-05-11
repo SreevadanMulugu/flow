@@ -1,0 +1,24 @@
+# macOS requirements (Apple Silicon and Intel)
+# Install: pip install -r requirements/mac.txt
+
+# Core server
+fastapi>=0.111.0
+uvicorn[standard]>=0.29.0
+numpy>=1.26.0
+sounddevice>=0.4.6
+soundfile>=0.12.1
+websockets>=12.0
+
+# Model inference — NeMo path (MPS, Python 3.10+)
+# Only needed if not using CoreML backend
+torch>=2.3.0
+# nemo_toolkit[asr]==2.7.3  # install separately — see setup_mac.sh
+
+# CoreML backend (highest RTFx on Apple Silicon)
+coremltools>=7.2
+huggingface_hub>=0.23.0
+
+# Optional utilities
+sentencepiece>=0.2.0
+pynput>=1.7.7
+pyperclip>=1.9.0
