@@ -2,8 +2,8 @@
 src-tauri/target/
 src-tauri/gen/
 
-# Compiled Python sidecar binary (build separately — see scripts/)
-src-tauri/binaries/
+# Compiled binary sidecars are tracked (they are shell scripts, not large binaries)
+# src-tauri/binaries/
 
 # Node
 node_modules/

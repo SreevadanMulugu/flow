@@ -3,7 +3,9 @@
 # Usage: bash scripts/setup_linux.sh
 
 set -e
+NEMO_VENV="$HOME/.flow/nemo_env"
 echo "Setting up Flow on Linux..."
+mkdir -p "$HOME/.flow"
 
 # Detect GPU
 HAS_CUDA=false
@@ -12,34 +14,35 @@ if nvidia-smi &>/dev/null; then
     CUDA_VER=$(nvidia-smi | grep "CUDA Version" | awk '{print $NF}')
     echo "NVIDIA GPU detected (CUDA $CUDA_VER)"
 else
-    echo "No NVIDIA GPU detected — using ONNX CPU INT8 backend"
+    echo "No NVIDIA GPU — using ONNX CPU INT8 backend"
 fi
 
-# Python venv
-python3 -m venv .venv
-source .venv/bin/activate
-pip install --upgrade pip
+# Find Python 3.10+
+PY=$(which python3.10 2>/dev/null || which python3.11 2>/dev/null || which python3 2>/dev/null)
+PY_VER=$("$PY" -c "import sys; print(sys.version_info[:2])")
+echo "Using Python: $PY ($PY_VER)"
+
+# Install NeMo venv (needed for ONNX export + CUDA streaming)
+echo ""
+echo "Creating NeMo venv at $NEMO_VENV ..."
+"$PY" -m venv "$NEMO_VENV"
+"$NEMO_VENV/bin/pip" install --upgrade pip --quiet
+"$NEMO_VENV/bin/pip" install youtokentome --no-build-isolation --quiet
 
 if $HAS_CUDA; then
-    pip install -r requirements/linux_cuda.txt
-
+    "$NEMO_VENV/bin/pip" install "nemo_toolkit[asr]==2.7.3" --quiet
+    "$NEMO_VENV/bin/pip" install onnxruntime-gpu soundfile sounddevice numpy --quiet
     echo ""
-    echo "Installing NeMo for true streaming (conformer_stream_step on CUDA)..."
-    pip install youtokentome --no-build-isolation
-    pip install nemo_toolkit[asr]==2.7.3
-
-    echo ""
-    echo "Exporting Parakeet to ONNX with INT8 quantization..."
-    echo "(~5 min, one-time — downloads 2.4GB NeMo model then exports)"
-    python3 scripts/export_onnx.py --quantize
+    echo "Exporting Parakeet to ONNX INT8 (~5 min, one-time)..."
+    "$NEMO_VENV/bin/python" scripts/export_onnx.py --quantize
 else
-    pip install onnxruntime numpy sounddevice soundfile fastapi uvicorn websockets sentencepiece
+    "$NEMO_VENV/bin/pip" install onnxruntime soundfile sounddevice numpy fastapi uvicorn websockets sentencepiece --quiet
     echo ""
-    echo "Exporting Parakeet to ONNX with INT8 quantization..."
-    echo "(requires NeMo on another machine, or download pre-exported model)"
-    echo "See: https://github.com/SreevadanMulugu/flow#onnx-model"
+    echo "No NVIDIA GPU — ONNX CPU INT8 backend will be used (~10x RTFx)"
+    echo "To export ONNX model, run on a machine with NeMo:"
+    echo "  python scripts/export_onnx.py --quantize"
 fi
 
 echo ""
-echo "Done! Run Flow:"
-echo "  npm run tauri dev"
+echo "Setup complete. Run the app:"
+echo "  npm install && npm run tauri dev"

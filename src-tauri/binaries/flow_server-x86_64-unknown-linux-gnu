@@ -1,0 +1,16 @@
+#!/bin/bash
+# Flow server sidecar — portable, works on any machine that cloned the repo.
+# Resolves engine/ relative to this script regardless of where the repo lives.
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+ENGINE_DIR="$(cd "$SCRIPT_DIR/../../engine" && pwd)"
+
+# Prefer ~/.flow/nemo_env Python (installed by setup_mac.sh), else system python3
+VENV_PY="$HOME/.flow/nemo_env/bin/python3"
+if [ -x "$VENV_PY" ]; then
+    PYTHON="$VENV_PY"
+else
+    PYTHON="$(which python3 2>/dev/null || which python 2>/dev/null || echo python3)"
+fi
+
+cd "$ENGINE_DIR"
+exec "$PYTHON" flow_server.py "$@"

@@ -1107,15 +1107,33 @@ class DictationEngine:
 
     # ── Parakeet subprocess management ──────────────────────────────────────
 
-    NEMO_PYTHON = "/tmp/nemo_env/bin/python3"
-    PARAKEET_WORKER = str(Path(__file__).parent / "parakeet_worker.py")
+    # Workers sit in engine/workers/ alongside engine/flow.py
+    PARAKEET_WORKER = str(Path(__file__).parent / "workers" / "parakeet_worker.py")
+
+    @staticmethod
+    def _find_nemo_python() -> str:
+        """Find the NeMo-capable Python interpreter on any OS."""
+        import sys, shutil
+        # Standard install location across all platforms: ~/.flow/nemo_env
+        venv = Path.home() / ".flow" / "nemo_env"
+        candidates = [
+            venv / ("Scripts/python.exe" if sys.platform == "win32" else "bin/python3"),
+            venv / ("Scripts/python"     if sys.platform == "win32" else "bin/python"),
+        ]
+        for p in candidates:
+            if p.exists():
+                return str(p)
+        # Fallback: system python3 (works if NeMo installed globally)
+        return shutil.which("python3") or shutil.which("python") or sys.executable
+
+    NEMO_PYTHON: str = ""   # set in __init_subclass__ / resolved lazily
 
     def _load_parakeet(self):
-        """Spawn parakeet_worker.py in the NeMo venv and wait for readiness."""
+        """Spawn parakeet_worker.py using the best available Python interpreter."""
         import subprocess, shutil
-        python = self.NEMO_PYTHON
-        if not Path(python).exists():
-            self.on_status("Parakeet: nemo venv not found — falling back to MLX")
+        python = self._find_nemo_python()
+        if not Path(python).exists() and python not in ("python3", "python"):
+            self.on_status("Parakeet: Python interpreter not found — run setup script")
             self._use_mlx = False
             self._use_parakeet = False
             return
